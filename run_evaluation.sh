@@ -13,7 +13,7 @@ QFLM_TEST_IP=${QFLM_TEST_IP:-"fd00:1::12"}
 SERVER_IP=${SERVER_IP:-"fd03:1::2"}
 
 # CSVファイル
-CSV_FILE="ospf_evaluation2_tcp/result.csv"
+CSV_FILE="ospf_evaluation3_tcp/result.csv"
 
 # 一時ファイル用ディレクトリ
 TEMP_DIR=$(mktemp -d)
@@ -33,14 +33,11 @@ cleanup() {
 trap cleanup SIGINT SIGTERM
 
 # iperf3の出力からスループットを抽出する関数
-# 引数: $1=出力ファイル, $2=送信元ポート番号, $3=実行回数
+# 引数: $1=出力ファイル
 extract_throughput() {
     local output_file=$1
-    local src_port=$2
-    local run=$3
     
     # Sender と Receiver のスループットを抽出 (Mbits/sec)
-    # UDPの場合、最後の2行にSenderとReceiverの結果がある
     local sender_bps=$(grep -E "^\[.*\].*sender" "$output_file" | tail -1 | awk '{for(i=1;i<=NF;i++) if($i~/bits\/sec/) print $(i-1)}')
     local receiver_bps=$(grep -E "^\[.*\].*receiver" "$output_file" | tail -1 | awk '{for(i=1;i<=NF;i++) if($i~/bits\/sec/) print $(i-1)}')
     
@@ -64,7 +61,7 @@ extract_throughput() {
         receiver_mbps=$(echo "scale=3; $receiver_bps / 1000" | bc)
     fi
     
-    echo "$run,$src_port,$sender_mbps,$receiver_mbps"
+    echo "$sender_mbps,$receiver_mbps"
 }
 
 echo "=========================================="
@@ -79,8 +76,8 @@ echo "=========================================="
 echo ""
 
 # CSVヘッダーを作成
-mkdir -p "evaluation2_udp"
-echo "run,src_port,sender_mbps,receiver_mbps" > "$CSV_FILE"
+mkdir -p "ospf_evaluation2_tcp"
+echo "run,flow1(50000)_sender,flow1(50000)_receiver,flow2(50001)_sender,flow2(50001)_receiver,flow3(50002)_sender,flow3(50002)_receiver" > "$CSV_FILE"
 
 for RUN in $(seq 1 $TOTAL_RUNS); do
     echo "=== 実行 $RUN / $TOTAL_RUNS 開始 ==="
@@ -110,20 +107,20 @@ for RUN in $(seq 1 $TOTAL_RUNS); do
     echo "終了時刻: $(date)"
     echo ""
 
-    # 各フローの結果を抽出してCSVに追記
+    # 各フローの結果を抽出
     echo "スループット結果:"
     
-    result1=$(extract_throughput "$TEMP_DIR/flow1.txt" 50000 $RUN)
-    echo "  フロー1 (50000): $result1"
-    echo "$result1" >> "$CSV_FILE"
+    result1=$(extract_throughput "$TEMP_DIR/flow1.txt")
+    result2=$(extract_throughput "$TEMP_DIR/flow2.txt")
+    result3=$(extract_throughput "$TEMP_DIR/flow3.txt")
     
-    result2=$(extract_throughput "$TEMP_DIR/flow2.txt" 50001 $RUN)
-    echo "  フロー2 (50001): $result2"
-    echo "$result2" >> "$CSV_FILE"
+    # 1行にまとめてCSVに追記
+    echo "$RUN,$result1,$result2,$result3" >> "$CSV_FILE"
     
-    result3=$(extract_throughput "$TEMP_DIR/flow3.txt" 50002 $RUN)
-    echo "  フロー3 (50002): $result3"
-    echo "$result3" >> "$CSV_FILE"
+    # 結果を表示
+    echo "  フロー1 (50000): sender=$(echo $result1 | cut -d',' -f1) Mbps, receiver=$(echo $result1 | cut -d',' -f2) Mbps"
+    echo "  フロー2 (50001): sender=$(echo $result2 | cut -d',' -f1) Mbps, receiver=$(echo $result2 | cut -d',' -f2) Mbps"
+    echo "  フロー3 (50002): sender=$(echo $result3 | cut -d',' -f1) Mbps, receiver=$(echo $result3 | cut -d',' -f2) Mbps"
     
     echo ""
 
