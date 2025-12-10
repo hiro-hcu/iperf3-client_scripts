@@ -28,14 +28,14 @@ echo "開始時刻: $(date)"
 echo ""
 
 # 3つのフローを同時に開始
-iperf3 -c $SERVER_IP -p 5201 --cport 50000 -t 300 -M 1000 -b 300M -l 1012&
+iperf3 -c $SERVER_IP -p 5201 --cport 50000 -t 300 -b 300M -l 1012 -w 4M &
 #iperf3 -c $QFLM_TEST_IP -p 5201 --cport 50000 -t 10 -M 1000 -b 300M -l 1400 -J > evaluation2_tcp/1.json &
 PID1=$!
 
-iperf3 -c $SERVER_IP -p 5202 --cport 50001 -t 300 -M 1000 -b 300M -l 1012&
+iperf3 -c $SERVER_IP -p 5202 --cport 50001 -t 300 -b 300M -l 1012 -w 4M &
 PID2=$!
 
-iperf3 -c $SERVER_IP -p 5203 --cport 50002 -t 300 -M 1000 -b 300M -l 1012&
+iperf3 -c $SERVER_IP -p 5203 --cport 50002 -t 300 -b 300M -l 1012 -w 4M &
 PID3=$!
 
 echo "フロー1 (ポート5201) PID: $PID1"

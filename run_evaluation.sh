@@ -13,7 +13,7 @@ QFLM_TEST_IP=${QFLM_TEST_IP:-"fd00:1::12"}
 SERVER_IP=${SERVER_IP:-"fd03:1::2"}
 
 # CSVファイル
-CSV_FILE="ospf_evaluation3_tcp/result.csv"
+CSV_FILE="srv6_evaluation2_udp/result.csv"
 
 # 一時ファイル用ディレクトリ
 TEMP_DIR=$(mktemp -d)
@@ -85,14 +85,14 @@ for RUN in $(seq 1 $TOTAL_RUNS); do
     echo ""
 
     # 3つのフローを同時に開始（一時ファイルに出力）
-    iperf3 -c $SERVER_IP -p 5201 --cport 50000 -t $DURATION -b 300M -M 1000 > "$TEMP_DIR/flow1.txt" &
+    iperf3 -c $SERVER_IP -p 5201 --cport 50000 -t $DURATION -b 300M -u -l 1012  > "$TEMP_DIR/flow1.txt" &
     PID1=$!
     # iperf3 -c $SERVER_IP -p 5201 --cport 50000 -t $DURATION -b 300M -u -l 1012 > "$TEMP_DIR/flow1.txt" &
     # iperf3 -c $SERVER_IP -p 5201 --cport 50000 -t $DURATION -b 300M -M 1000 > "$TEMP_DIR/flow1.txt" &
-    iperf3 -c $SERVER_IP -p 5202 --cport 50001 -t $DURATION -b 300M -M 1000 > "$TEMP_DIR/flow2.txt" &
+    iperf3 -c $SERVER_IP -p 5202 --cport 50001 -t $DURATION -b 300M -u -l 1012 > "$TEMP_DIR/flow2.txt" &
     PID2=$!
 
-    iperf3 -c $SERVER_IP -p 5203 --cport 50002 -t $DURATION -b 300M -M 1000 > "$TEMP_DIR/flow3.txt" &
+    iperf3 -c $SERVER_IP -p 5203 --cport 50002 -t $DURATION -b 300M -u -l 1012 > "$TEMP_DIR/flow3.txt" &
     PID3=$!
 
     echo "フロー1 (送信元ポート50000, 宛先ポート5201) PID: $PID1"
