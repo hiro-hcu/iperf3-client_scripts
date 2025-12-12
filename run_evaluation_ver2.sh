@@ -6,17 +6,20 @@
 
 # 設定
 TOTAL_RUNS=10
-INTERVAL=10  # 秒
-DURATION=10  # iperf3の実行時間（計測期間）
-WARMUP=5     # ウォームアップ時間（秒）- 計測しない帯域を流す
+INTERVAL=5  # 秒
+DURATION=300  # iperf3の実行時間（計測期間）
+WARMUP=60     # ウォームアップ時間（秒）- 計測しない帯域を流す
+
+# プロトコル設定 ("udp" or "tcp")
+PROTOCOL="udp"
 
 # 転送先IPアドレス
 QFLM_TEST_IP=${QFLM_TEST_IP:-"fd00:1::12"}
 SERVER_IP=${SERVER_IP:-"fd03:1::2"}
 
 # 結果保存ディレクトリ
-RESULT_DIR="srv6_evaluation2_udp/trial2"
-CSV_FILE="$RESULT_DIR/srv6_eval2_udp_trial.csv"
+RESULT_DIR="srv6_evaluation3_udp/trial2"
+CSV_FILE="$RESULT_DIR/srv6_eval3_udp_trial.csv"
 
 # Ctrl+C で全プロセスを停止する処理
 cleanup() {
@@ -32,19 +35,22 @@ cleanup() {
 trap cleanup SIGINT SIGTERM
 
 # JSONからスループットを抽出する関数 (Mbps)
-# 引数: $1=JSONファイル
+# 引数: $1=JSONファイル, $2=プロトコル("udp" or "tcp")
 extract_throughput_json() {
     local json_file=$1
+    local protocol=$2
     
-    # UDP/TCPの両方に対応してスループットを抽出
-    # UDP: .end.streams[0].udp.bits_per_second
-    # TCP: .end.sum_sent.bits_per_second または .end.streams[0].sender.bits_per_second
-    local sender_bps=$(jq -r '.end.streams[0].udp.bits_per_second // .end.sum_sent.bits_per_second // .end.streams[0].sender.bits_per_second // 0' "$json_file" 2>/dev/null)
-    local receiver_bps=$(jq -r '.end.sum_received.bits_per_second // .end.streams[0].receiver.bits_per_second // 0' "$json_file" 2>/dev/null)
-    
-    # UDPの場合、receiverはsenderと同じ値を使用（片方向なのでreceiverの値は別で取得）
-    if [[ "$receiver_bps" == "0" ]]; then
-        receiver_bps=$sender_bps
+    if [[ "$protocol" == "udp" ]]; then
+        # UDP: sender側のスループットを取得
+        local sender_bps=$(jq -r '.end.streams[0].udp.bits_per_second // 0' "$json_file" 2>/dev/null)
+        
+        # ロス率からreceiver側スループットを推定
+        local lost_percent=$(jq -r '.end.streams[0].udp.lost_percent // 0' "$json_file" 2>/dev/null)
+        local receiver_bps=$(echo "scale=6; $sender_bps * (1 - $lost_percent / 100)" | bc 2>/dev/null || echo "0")
+    else
+        # TCP: sender/receiver両方取得可能
+        local sender_bps=$(jq -r '.end.sum_sent.bits_per_second // .end.streams[0].sender.bits_per_second // 0' "$json_file" 2>/dev/null)
+        local receiver_bps=$(jq -r '.end.sum_received.bits_per_second // .end.streams[0].receiver.bits_per_second // 0' "$json_file" 2>/dev/null)
     fi
     
     # bits/sec を Mbps に変換
@@ -134,6 +140,7 @@ for RUN in $(seq 1 $TOTAL_RUNS); do
     
     # 3つのフローを同時に開始（JSON形式で出力）
     iperf3 -c $SERVER_IP -p 5201 --cport 50000 -t $DURATION -b 300M -u -l 1012 -J > "$RUN_DIR/flow1.json" &
+    # iperf3 -c $SERVER_IP -p 5201 --cport 50000 -t $DURATION -b 300M -u -l 1012 -J > "$RUN_DIR/flow1.json" &
     # iperf3 -c $SERVER_IP -p 5201 --cport 50000 -t $DURATION -b 300M -M 1000 -J > "$RUN_DIR/flow1.json" &
     PID1=$!
     
@@ -159,9 +166,9 @@ for RUN in $(seq 1 $TOTAL_RUNS); do
     # 各フローの結果をJSONから抽出
     echo "スループット結果:"
     
-    result1=$(extract_throughput_json "$RUN_DIR/flow1.json")
-    result2=$(extract_throughput_json "$RUN_DIR/flow2.json")
-    result3=$(extract_throughput_json "$RUN_DIR/flow3.json")
+    result1=$(extract_throughput_json "$RUN_DIR/flow1.json" "$PROTOCOL")
+    result2=$(extract_throughput_json "$RUN_DIR/flow2.json" "$PROTOCOL")
+    result3=$(extract_throughput_json "$RUN_DIR/flow3.json" "$PROTOCOL")
     
     # 遅延(RTT/Jitter)を抽出
     rtt1=$(extract_rtt_json "$RUN_DIR/flow1.json")
